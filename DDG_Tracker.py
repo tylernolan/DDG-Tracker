@@ -34,7 +34,7 @@ class Boardstate():
 		self.treasures = defaultdict(lambda: [None for x in range(3)])
 		self.turnCounter = turnCounter
 		self.mutable = None
-	def to_json(self):
+	def to_json(self, playerid=None):
 		ret = defaultdict(dict)
 		ret["turnCounter"] = self.turnCounter
 		for player in self.heroes:
@@ -43,6 +43,8 @@ class Boardstate():
 			ret[player]["treasures"] = [{"DisplayName":x.DisplayName, "Art":x.ArtContentID} if x is not None else None for x in self.treasures[player]]
 			ret[player]["hero"] = exportCardSnapNoDict(self.heroes[player])
 			ret[player]["spells"] = exportCardSnapNoDict(self.spells[player])
+		if playerid != None:
+			ret["playerId"] = playerid
 		ret["winners"], ret["losers"] = self.getWinner()
 		return ret
 	def getJsonNames(self, playerId):
@@ -109,7 +111,6 @@ class Boardstate():
 			str += "ENDBOARD\n: {}".format(self.mutable.old__str__())
 		return str
 
-
 class Gamestate():
 	def __init__(self):
 		self.playerId = None
@@ -169,6 +170,13 @@ class Gamestate():
 		self.combatBoard.heroes[self.playerId] = self.cardDict[self.currentHero]
 		#(self.combatBoard.old__str__())
 		self.combatBoard.mutable = deepcopy(self.combatBoard)
+
+	def dumpCombatStart(self):
+		if self.combatBoard is None or self.combatBoard.mutable is None:
+			return
+		f = open("lastCombat.json", 'w')
+		f.write(json.dumps(self.combatBoard.to_json(playerid=self.playerId)))
+		f.close()
 	def ActionDeath(self, action):
 		if self.initCombat:
 			self.ActionAttack(action)
@@ -342,6 +350,7 @@ class Gamestate():
 		print(r)
 		return data
 	def dumpCurrentState(self, prevSent = [None]):
+		self.dumpCombatStart()
 		ret = defaultdict(dict)
 		try:
 			ret["hero"] = self.cardDict[self.currentHero].DisplayName
@@ -392,7 +401,8 @@ class GameAction():
 			if line[i].startswith("UnityEngine") or line[i].startswith("(Filename:"):
 				line = "".join(line[:i])
 				break
-
+		if type(line) == type([]):
+			line = "".join(line)
 		data = line.split("|")
 		self.bought = False
 		self.actionType = data[0].split(":")[3].split(".")[-1].strip()
@@ -415,13 +425,25 @@ def checkForUpdates():
 
 def parseFile(filename, username, password, mmr, sentGames):
 	data = open(filename).read()
-	data = data.split("\n\n")
-	print(len(data))
+
 	currentGS = None
 	gamestates = []
+	lines = []
+	#cleanup step, ignore the useless lines. This is awful.
+	#linebreaks in card effects linebreak in the log file too, this was the fastest workaround.
+	data = data.split("\n")
+	for line in data:
+		if (line.startswith("Unloading") or line.startswith("Total:") or
+				line.startswith("Got unused action") or line.startswith("CommsActionReceived") or
+				line.startswith("UnityEngine") or line.startswith("SBB") or line.startswith("Filename:")):
+			pass
+		else:
+			lines.append(line)
+	data = "\n".join(lines)
+	data = data.split("GameAction")
 	for line in data:
 		line = line.strip()
-		if line.startswith("GameActionReceived"):
+		if line.startswith("Received"):
 			if currentGS != None:
 				resp = currentGS.readGameAction(line)
 				if resp == False:
@@ -438,6 +460,7 @@ def parseFile(filename, username, password, mmr, sentGames):
 		if currentGS is not None and currentGS.gameCompleted:
 			exp = currentGS.exportGame(ddgUser=username, password=password, sentGames=sentGames)
 			if exp != None:
+				currentGS.dumpCurrentState()
 				logging.debug("request sent, adding to sentGames {}".format(currentGS.playerId))
 				sentGames.append(exp["invariant"])
 				f = open("./sentGames.txt", 'w')
@@ -466,8 +489,11 @@ def sendExtensionData(gs, username, password):
 	req["gamestate"] = data
 	if data != None:
 		print(json.dumps(data))
-		r = requests.post("https://datadrivengaming.net/sbb/observer/update", data=json.dumps(req))
-		print(r)
+		try:
+			r = requests.post("https://datadrivengaming.net/sbb/observer/update", data=json.dumps(req))
+			print(r)
+		except requests.exceptions.ConnectionError:
+			return
 	#f = open("testdata.json", 'w')
 	#f.write(json.dumps(data))
 	#f.close()
