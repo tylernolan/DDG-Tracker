@@ -225,6 +225,7 @@ class Gamestate():
 		pass
 	def ActionEnterResultsPhase(self, action):
 		self.gameCompleted = True
+		self.placement = action.Placement
 	def ActionEnterIntroPhase(self, action):
 		pass
 	def ActionPresentHeroDiscover(self, action):
@@ -314,12 +315,17 @@ class Gamestate():
 			self.combatBoard.mutable.boards[action.PlayerId][int(action.Slot)] = action
 
 	def readGameAction(self, line):
-		action = GameAction(line)
-		if self.firstActionSeen is None:
-			self.firstActionSeen = action
-		if int(self.firstActionSeen.Timestamp) > 20:
-			return False #if you're reconnecting to the game, just abandon trying to make a sensible game about it.
-		self.__getattribute__(action.actionType)(action)
+		try:
+			action = GameAction(line)
+
+			if self.firstActionSeen is None:
+				self.firstActionSeen = action
+			if int(self.firstActionSeen.Timestamp) > 20:
+				return False  # if you're reconnecting to the game, just abandon trying to make a sensible game about it.
+
+			self.__getattribute__(action.actionType)(action)
+		except AttributeError:
+			print("Unable to parse line: {}".format(line))
 		return True
 	def exportGame(self, ddgUser, password, sentGames):
 		if self.hero is None:
@@ -339,7 +345,7 @@ class Gamestate():
 			return
 		won = self.combats[-1].didPlayerWin(self.playerId)
 		data={"username":ddgUser, "invariant":invariant, "password":password, "hero":hero, "combats":combats, "boughtUnits":boughtUnits, "shops":shops,
-														   "turnDead":turnDead, "won":won, "playerId":playerId, "hands":hands}
+														   "turnDead":turnDead, "won":won, "playerId":playerId, "hands":hands, "placement":self.placement}
 		logging.debug("data dumped")
 		if DEBUG:
 			r = requests.post("http://127.0.0.1:5000/sbb/recv", data=json.dumps(data))
@@ -424,7 +430,7 @@ def checkForUpdates():
 	return True
 
 def parseFile(filename, username, password, mmr, sentGames):
-	data = open(filename).read()
+	data = open(filename, encoding="utf-8").read()
 
 	currentGS = None
 	gamestates = []
@@ -435,15 +441,18 @@ def parseFile(filename, username, password, mmr, sentGames):
 	for line in data:
 		if (line.startswith("Unloading") or line.startswith("Total:") or
 				line.startswith("Got unused action") or line.startswith("CommsActionReceived") or
-				line.startswith("UnityEngine") or line.startswith("SBB") or line.startswith("Filename:")):
+				line.startswith("UnityEngine") or line.startswith("SBB") or line.startswith("Filename:")
+				or line.strip() == "" or line.startswith("!!!!") or line.startswith("GAME SERVER") or line.startswith(
+					"UnloadTime") or line.startswith("SetEntity")):
 			pass
 		else:
 			lines.append(line)
 	data = "\n".join(lines)
-	data = data.split("GameAction")
+	data = data.split("[QueueActionRPC]")
 	for line in data:
 		line = line.strip()
-		if line.startswith("Received"):
+		#print(line)
+		if "Action:" in line:
 			if currentGS != None:
 				resp = currentGS.readGameAction(line)
 				if resp == False:
@@ -479,7 +488,7 @@ def debugFunc():
 	player = "./Player.log"
 	sentGames = json.loads(open("./sentGames.txt", 'r').read())
 	currentGame = parseFile(player, username, password, mmr, sentGames)
-	sendExtensionData(currentGame)
+	sendExtensionData(currentGame, username, password)
 
 def sendExtensionData(gs, username, password):
 	data = gs.dumpCurrentState()
