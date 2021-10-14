@@ -450,10 +450,10 @@ def parseFile(filename, username, password, mmr, sentGames):
 		else:
 			lines.append(line)
 	data = "\n".join(lines)
-	data = data.split("GameAction")
+	data = data.split("[QueueAction") # Each GameAction line starts with [QueueActionRPC]
 	for line in data:
 		line = line.strip()
-		if line.startswith("Received"):
+		if line.startswith("RPC"):
 			if currentGS != None:
 				resp = currentGS.readGameAction(line)
 				if resp == False:
