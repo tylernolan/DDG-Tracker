@@ -248,7 +248,7 @@ class Gamestate():
 		'''
 		ActionAddPlayer is called immediately after ActionEnterResultsPhase
 		Each entry contains both a PlayerId and a Place from 1 to 8
-    	Mark the game as completed once the current player's final placement has been detected.
+		Mark the game as completed once the current player's final placement has been detected.
 		'''
 		if self.inResultsPhase and action.PlayerId == self.playerId:
 			self.placement = int(action.Place)
