@@ -114,6 +114,7 @@ class Boardstate():
 class Gamestate():
 	def __init__(self):
 		self.playerId = None
+		self.placement = None
 		self.board = [None for x in range(7)]
 		self.hand = [None for x in range(4)]
 		self.activeSpell = None
@@ -129,6 +130,7 @@ class Gamestate():
 		self.gold = 0
 		self.turnCounter = 0
 		self.initCombat = False
+		self.inResultsPhase=False
 		self.gameCompleted=False
 		self.eliminations = []
 		self.shopRoll = 0
@@ -224,7 +226,7 @@ class Gamestate():
 	def ActionPresentDiscover(self, action):
 		pass
 	def ActionEnterResultsPhase(self, action):
-		self.gameCompleted = True
+		self.inResultsPhase = True
 	def ActionEnterIntroPhase(self, action):
 		pass
 	def ActionPresentHeroDiscover(self, action):
@@ -243,7 +245,14 @@ class Gamestate():
 	def ActionUpdateEmotes(self, action):
 		pass
 	def ActionAddPlayer(self, action):
-		pass
+		'''
+		ActionAddPlayer is called immediately after ActionEnterResultsPhase
+		Each entry contains both a PlayerId and a Place from 1 to 8
+    	Mark the game as completed once the current player's final placement has been detected.
+		'''
+		if self.inResultsPhase and action.PlayerId == self.playerId:
+			self.placement = int(action.Place)
+			self.gameCompleted = True
 	def ActionRemoveCard(self, action):
 		pass
 	def ActionMoveCard(self, action):
@@ -337,9 +346,10 @@ class Gamestate():
 		playerId = self.playerId
 		if len(self.combats) == 0:
 			return
-		won = self.combats[-1].didPlayerWin(self.playerId)
+		placement = self.placement
+		won = self.placement == 1
 		data={"username":ddgUser, "invariant":invariant, "password":password, "hero":hero, "combats":combats, "boughtUnits":boughtUnits, "shops":shops,
-														   "turnDead":turnDead, "won":won, "playerId":playerId, "hands":hands}
+														   "turnDead":turnDead, "won":won, "placement":placement, "playerId":playerId, "hands":hands}
 		logging.debug("data dumped")
 		if DEBUG:
 			r = requests.post("http://127.0.0.1:5000/sbb/recv", data=json.dumps(data))
