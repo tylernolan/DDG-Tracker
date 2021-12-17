@@ -9,6 +9,10 @@ import requests
 from subprocess import Popen
 import traceback
 DEBUG = False
+
+r = requests.get("https://datadrivengaming.net/assets/json/cardIds.json").text
+idMap = json.loads(r)
+print(r)
 class stateEnum(Enum):
 	SHOP = 0
 	COMBAT = 1
@@ -247,6 +251,8 @@ class Gamestate():
 		pass
 	def ActionRemoveCard(self, action):
 		pass
+	def ActionEmote(self, action):
+		pass
 	def ActionMoveCard(self, action):
 		try:
 			oldLoc = self.cardDict[action.CardId].Zone
@@ -315,7 +321,7 @@ class Gamestate():
 			self.combatBoard.mutable.boards[action.PlayerId][int(action.Slot)] = action
 
 	def readGameAction(self, line):
-		try:
+		#try:
 			action = GameAction(line)
 
 			if self.firstActionSeen is None:
@@ -324,9 +330,10 @@ class Gamestate():
 				return False  # if you're reconnecting to the game, just abandon trying to make a sensible game about it.
 
 			self.__getattribute__(action.actionType)(action)
-		except AttributeError:
-			print("Unable to parse line: {}".format(line))
-		return True
+
+		#except AttributeError:
+			#print("Unable to parse line: {}".format(line))
+		#return True
 	def exportGame(self, ddgUser, password, sentGames):
 		if self.hero is None:
 			return
@@ -410,12 +417,23 @@ class GameAction():
 		if type(line) == type([]):
 			line = "".join(line)
 		data = line.split("|")
+		#print(data)
 		self.bought = False
 		self.actionType = data[0].split(":")[3].split(".")[-1].strip()
 		for datum in data[1:]:
 			stuff = datum.split(":") #actions involving a card have 2 colons
 			if len(stuff) > 1:
 				setattr(self, stuff[-2].strip(), stuff[-1].strip())
+
+		try:
+			self.DisplayName = idMap[self.CardTemplateId][1]
+			self.ArtContentID = idMap[self.CardTemplateId][0]
+		except AttributeError:
+			pass
+		except KeyError:
+			self.DisplayName = "MISSINGNO"
+			self.ArtContentID = "MISSINGNO"
+			#print("Missing template ID: {}".format(self.CardTemplateId))
 
 	def __str__(self):
 		return("{} - {}".format(self.actionType, self.Timestamp))
@@ -443,12 +461,13 @@ def parseFile(filename, username, password, mmr, sentGames):
 				line.startswith("Got unused action") or line.startswith("CommsActionReceived") or
 				line.startswith("UnityEngine") or line.startswith("SBB") or line.startswith("Filename:")
 				or line.strip() == "" or line.startswith("!!!!") or line.startswith("GAME SERVER") or line.startswith(
-					"UnloadTime") or line.startswith("SetEntity")):
+					"UnloadTime") or line.startswith("SetEntity") or "STATECHANGE" in line or "[GameServer.Tick]" in line or "[MatchState.Tick]" in line
+				or line.startswith("ActionUpdateCard")):
 			pass
 		else:
 			lines.append(line)
 	data = "\n".join(lines)
-	data = data.split("[QueueActionRPC]")
+	data = data.split("Writing binary data to recorder for action")
 	for line in data:
 		line = line.strip()
 		#print(line)
@@ -511,7 +530,7 @@ def mainFunc():
 	if checkForUpdates() and not DEBUG:
 		Popen('./Updater.exe')
 	else:
-		logging.basicConfig(filename='./logfile.log', level=logging.DEBUG)
+		logging.basicConfig(filename='./logfile1.log', level=logging.DEBUG)
 		try:
 			config = open("./config.txt", 'r').readlines()
 		except FileNotFoundError:
