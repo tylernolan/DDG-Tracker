@@ -431,8 +431,8 @@ class GameAction():
 		except AttributeError:
 			pass
 		except KeyError:
-			self.DisplayName = "MISSINGNO"
-			self.ArtContentID = "MISSINGNO"
+			self.DisplayName = "MISSINGNO_{}".format(self.CardTemplateId)
+			self.ArtContentID = "MISSINGNO_{}".format(self.CardTemplateId)
 			#print("Missing template ID: {}".format(self.CardTemplateId))
 
 	def __str__(self):
